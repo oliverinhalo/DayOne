@@ -5,93 +5,115 @@ A fully offline app for taking one photo a day, forever, across as many independ
 someone else. Nothing in this app ever touches the network: no `INTERNET` permission
 is even declared in the manifest.
 
+## Install it
+
+Every release ships a ready-to-install APK on the
+[Releases page](../../releases) — download `DayOne-<version>.apk` on the phone and open it
+(you'll need to allow "install from unknown sources" for whichever app opens the file).
+
+Releases are built by GitHub Actions and signed with the key in `keystore/`, which is
+deliberately checked in so that **every** build — from CI, from your laptop, from anywhere —
+is signed identically. Android only lets an app update in place when the new APK carries
+the same signature, so a stable key is what keeps your photos, streaks and settings across
+updates. It is a self-signed sideload key for a private, offline app, not a Play Store key.
+
 ## What's included
 
-- **Multiple instances** — create any number of projects (Me / Group / Friend / etc),
-  each with its own folder on disk, streak, and reminder time.
-- **Capture screen** — live camera preview with:
-  - a translucent ghost overlay of *yesterday's* photo so you can line up your position
-  - a dashed oval "head zone" guide + center crosshair
-  - a slider to adjust the ghost overlay strength
-- **Auto face-centered crop** — every captured photo is run through on-device ML Kit
-  face detection and cropped/scaled so the face is consistently centered day to day,
-  matching the guide oval. Fully offline (ML Kit's bundled model does not call the network).
-- **Daily reminder that won't let you forget** — an exact alarm fires at your chosen time
-  each morning; if you haven't taken that day's photo, it re-notifies every 45 minutes
-  until you do (or until midnight). Survives reboots.
-- **Timeline view** — scrub through every day with a slider + thumbnail strip.
-- **Video export** — stitches all of a project's photos into an MP4 timelapse with
-  burned-in overlays you can toggle: day number, date, age (from an optional birthdate),
-  and year. Built with the platform's own `MediaCodec`/`MediaMuxer`, no extra library.
+- **Multiple instances** — any number of projects (Me / Group / Friend / …), each with its
+  own folder on disk, streak, colour and reminder schedule. Archive the ones you pause.
+- **Capture screen** built around getting the same shot every day:
+  - the square that actually gets saved is outlined on screen, everything outside it dimmed
+  - an overlay of a previous photo in one of five styles — ghost, **outline** (edge-detected,
+    the easiest to line up against), split-screen, stripes, or off
+  - the reference can be yesterday's photo, the very first one, or any day you pin
+  - drag/pinch to nudge and resize the overlay, mirror it, adjust opacity
+  - grid overlays, a head-guide oval matching the auto-crop, tap-to-focus, pinch zoom,
+    torch, self-timer, and an optional review-before-saving step
+- **Auto face-centred crop** — on-device ML Kit face detection crops and scales each photo
+  so the face lands in the same place day to day. Crop tightness is adjustable per project,
+  and can be switched off entirely.
+- **Reminders that fit your week** — pick the time, pick the days (every day, Mon–Fri,
+  weekends, or e.g. Mon/Wed/Sat), add a second reminder, choose how often it repeats while
+  the photo is outstanding and what time it gives up. Notification buttons: take the photo,
+  snooze an hour, or skip today. Survives reboots, clock changes and app updates.
+- **Streaks that understand your schedule** — days you aren't scheduled for, and days you
+  deliberately skip, don't count towards the streak and don't break it. Current streak,
+  best streak, completion rate and a month calendar of shot / missed / rest days.
+- **Timeline** — swipe through every day, add a note, star favourites, share a single
+  photo, pin one as the capture reference, or delete it.
+- **Video export** — stitches a project's photos into an MP4 timelapse with burned-in
+  overlays (day number, date, age, year, notes, project name, progress bar), optional
+  crossfades, and a choice of resolution / frame rate / pace / quality. The finished file
+  is copied to `Movies/DayOne`, so it shows up in your gallery and Files app.
+- **Backup, restore and import** — export everything to a `.zip` in `Documents/DayOne`
+  (outside the app, so it survives an uninstall), restore it later, or bulk-import existing
+  photos whose dates come from their filenames or EXIF data.
+- **Theming** — system/light/dark, pure-black dark mode, Material You dynamic colour, or a
+  fixed accent colour.
 
 ## Project structure
 
 ```
 DayOne/
 ├── app/src/main/java/com/dayone/app/
-│   ├── data/            Room database, DAOs, PhotoRepository (all local storage)
-│   ├── camera/           CameraX wrapper + ML Kit face-crop logic
-│   ├── notify/           AlarmManager-based daily/nag reminder system
-│   ├── video/            MediaCodec-based MP4 exporter with overlays
-│   └── ui/screens/       Jetpack Compose screens (list, capture, timeline, export)
-└── app/src/main/AndroidManifest.xml
+│   ├── data/             Room database, repositories, streak maths, backup/restore, MediaStore
+│   ├── camera/           CameraX wrapper, ML Kit face-crop, edge-detection for the overlay
+│   ├── notify/           AlarmManager reminder scheduling, notifications and their actions
+│   ├── video/            MediaCodec + OpenGL ES MP4 exporter
+│   └── ui/               Compose screens, shared components and theming
+├── app/src/test/         JVM unit tests for the streak and schedule rules
+└── .github/workflows/    CI build + tagged release that publishes the APK
 ```
 
-## How to build the APK
+## Building it yourself
 
-You'll need [Android Studio](https://developer.android.com/studio) (free) installed.
-No coding required — this is a one-time, few-click process:
+Open the folder in [Android Studio](https://developer.android.com/studio) and let Gradle
+sync, then **Build → Build App Bundle(s) / APK(s) → Build APK(s)**. From the command line:
 
-1. Unzip this project.
-2. Open Android Studio → **File → Open** → select the unzipped `DayOne` folder.
-3. Let Gradle sync finish (Android Studio will download the Gradle wrapper and all
-   dependencies automatically the first time — this needs an internet connection just
-   for this one-time setup step; the *app itself* never uses the network at runtime).
-4. **Build → Build App Bundle(s) / APK(s) → Build APK(s)**.
-5. When it finishes, click the "locate" link in the notification, or find the file at:
-   `app/build/outputs/apk/debug/app-debug.apk`
-6. Copy that `.apk` to your phone (email, USB, cloud drive — whatever you like) and
-   install it. You'll need to allow "install from unknown sources" for whichever app
-   you use to open the file, since it isn't from the Play Store.
+```bash
+./gradlew :app:assembleRelease      # signed APK at app/build/outputs/apk/release/
+./gradlew :app:testDebugUnitTest    # unit tests
+./gradlew :app:lintDebug            # lint
+```
 
-If you'd rather have a **release** build (smaller, no `.debug` suffix on the package
-name), use **Build → Generate Signed App Bundle / APK** instead and let Android Studio
-create a new keystore for you when prompted — keep that keystore file safe if you ever
-want to update the app later with the same package identity.
+Requirements: JDK 17, Android SDK 35. The Gradle wrapper fetches everything else.
+
+### Cutting a release
+
+```bash
+git tag v2.1 && git push origin v2.1
+```
+
+The `Release APK` workflow builds, tests and publishes `DayOne-v2.1.apk` to a GitHub
+Release. Bump `versionCode` / `versionName` in `app/build.gradle.kts` first — Android
+refuses to install an update whose `versionCode` isn't higher than the installed one.
 
 ## First-run setup on your phone
 
-The app will ask for two things it needs to actually nag you reliably:
+1. **Notification permission** (Android 13+) — asked on first launch.
+2. **"Allow exact alarms"** (Android 12+) — Android treats this as a special permission
+   that can't be requested with a normal popup. The home screen shows a banner that takes
+   you straight to the right Settings page; tap it once and flip the switch.
+3. **Battery optimisation** — set DayOne to "Unrestricted" (Settings → Apps → DayOne →
+   Battery, or the shortcut in the app's settings) so Android doesn't delay the alarms.
 
-1. **Notification permission** (Android 13+) — asked automatically on first launch.
-2. **"Allow exact alarms"** (Android 12+) — Android treats this as a special
-   permission that can't be requested via a normal popup. The app shows a banner
-   on the home screen that takes you straight to the right Settings page — tap it
-   once and flip the switch.
+## Where your data lives
 
-Also worth doing manually, since manufacturers vary:
-- Disable battery optimization for DayOne (Settings → Apps → DayOne → Battery →
-  "Unrestricted") so Android doesn't kill the reminder alarms in the background.
+- Photos: `Android/data/com.dayone.app/files/DayOne/<Project>/`, one JPEG per day named
+  `<epochDay>_<yyyy-MM-dd>.jpg`.
+- Metadata: a Room database inside the app's private storage.
+- Exported videos: `Movies/DayOne` (shared storage) plus a copy under the app's `exports/`.
+- Backups: `Documents/DayOne/dayone-backup-<timestamp>.zip`.
 
-## Notes / things you may want to tweak
+Photos in app storage are deleted if you uninstall the app, so use **Settings → Export a
+backup** before uninstalling, switching phones, or installing a build signed with a
+different key. Auto Backup rules are also set up, so a Google-backed device transfer
+carries the projects and photos across.
 
-- Reminder nag interval is 45 minutes — change `NAG_INTERVAL_MINUTES` in
-  `notify/ReminderScheduler.kt`.
-- Default reminder time is 8:00am — set per-project when you create it.
-- Photos are stored at `Android/data/com.dayone.app/files/DayOne/<ProjectFolder>/`
-  on your phone's storage (app-specific, no storage permission needed). Exported
-  videos land in a `exports/` subfolder there too.
-- Face-crop "headroom" and oval size are tuned in `camera/FaceCropper.kt`
-  (`headFraction`) and `ui/screens/CaptureOverlay.kt` if you want the crop tighter
-  or looser.
+## Upgrading from 1.x
 
-## A note on how this was built
-
-This project was generated as source code only — it has **not** been compiled or run
-in a real Android build environment, since that requires the Android SDK and Google's
-Maven repository, which weren't reachable from the sandbox this was written in. The
-code is complete and follows standard, well-tested Android patterns (CameraX, Room,
-ML Kit, AlarmManager, MediaCodec), but budget an extra pass for the normal small fixes
-that come up the first time any nontrivial project is actually compiled — a typo, a
-missing import, a small API mismatch. Nothing here is exotic, so those should be quick
-to spot from Android Studio's error list if they come up at all.
+The database migration is a real, non-destructive migration — projects, photos, notes and
+streaks all carry over, provided the update installs over the top of the old app. That
+requires the same package name **and** the same signing key; if Android refuses the
+install with a signature error, export a backup first (or copy the photo folder off the
+phone over USB), uninstall, install, then use **Restore** or **Import photos**.

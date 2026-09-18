@@ -1,159 +1,270 @@
 package com.dayone.app.ui.screens
 
 import android.app.Application
+import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Cake
+import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dayone.app.DayOneApp
+import com.dayone.app.data.AppSettings
+import com.dayone.app.data.db.Project
+import com.dayone.app.data.db.Weekdays
 import com.dayone.app.notify.ReminderScheduler
+import com.dayone.app.ui.components.SectionHeader
+import com.dayone.app.ui.components.SettingRow
+import com.dayone.app.ui.components.SettingsCard
+import com.dayone.app.ui.components.TimePickerDialog
+import com.dayone.app.ui.components.WeekdayPicker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import java.time.LocalTime
+import kotlinx.coroutines.withContext
+import java.time.Instant
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 private val palette = listOf(
     0xFF00E5A0.toInt(), 0xFF4FC3F7.toInt(), 0xFFFFB74D.toInt(),
-    0xFFF06292.toInt(), 0xFFBA68C8.toInt(), 0xFFFFF176.toInt()
+    0xFFF06292.toInt(), 0xFFBA68C8.toInt(), 0xFFFFD54F.toInt(),
+    0xFF81C784.toInt(), 0xFFFF8A65.toInt()
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateProjectScreen(onDone: () -> Unit, viewModel: CreateProjectViewModel = viewModel_()) {
-    var name by remember { mutableStateOf("") }
-    var hour by remember { mutableStateOf(8) }
-    var minute by remember { mutableStateOf(0) }
-    var trackAge by remember { mutableStateOf(false) }
-    var birthYear by remember { mutableStateOf(2000) }
-    var birthMonth by remember { mutableStateOf(1) }
-    var birthDay by remember { mutableStateOf(1) }
-    var color by remember { mutableStateOf(palette.first()) }
-    val scope = rememberCoroutineScope()
+fun CreateProjectScreen(
+    onDone: () -> Unit,
+    onCancel: () -> Unit,
+    viewModel: CreateProjectViewModel = viewModel()
+) {
+    val context = LocalContext.current
+    val defaults by viewModel.settings.collectAsStateWithLifecycle()
 
-    Scaffold(topBar = { TopAppBar(title = { Text("New instance") }) }) { padding ->
+    var name by remember { mutableStateOf("") }
+    var color by remember { mutableIntStateOf(palette.first()) }
+    var reminderMinute by remember(defaults.defaultReminderMinuteOfDay) {
+        mutableIntStateOf(defaults.defaultReminderMinuteOfDay)
+    }
+    var daysMask by remember(defaults.defaultActiveDaysMask) {
+        mutableIntStateOf(defaults.defaultActiveDaysMask)
+    }
+    var birthDateMillis by remember { mutableStateOf<Long?>(null) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var showBirthdayPicker by remember { mutableStateOf(false) }
+    var creating by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("New instance") },
+                navigationIcon = {
+                    IconButton(onClick = onCancel) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
+    ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(24.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
         ) {
+            Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("Name (e.g. Me, Group photo, Mum)") },
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(Modifier.height(24.dp))
-            Text("Accent color", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(palette) { c ->
-                    val selected = c == color
+            SectionHeader("Accent colour")
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                palette.forEach { argb ->
+                    val selected = argb == color
                     Box(
                         modifier = Modifier
-                            .size(if (selected) 44.dp else 36.dp)
+                            .size(if (selected) 38.dp else 32.dp)
                             .clip(CircleShape)
-                            .background_(Color(c))
-                            .clickable_ { color = c }
+                            .background(Color(argb))
+                            .border(
+                                width = if (selected) 3.dp else 0.dp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                shape = CircleShape
+                            )
+                            .clickable { color = argb }
                     )
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
-            Text("Daily reminder time", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                NumberStepper(value = hour, range = 0..23, onChange = { hour = it }, label = "Hour")
-                Spacer(Modifier.width(16.dp))
-                NumberStepper(value = minute, range = 0..59, step = 5, onChange = { minute = it }, label = "Min")
-            }
-
-            Spacer(Modifier.height(24.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = trackAge, onCheckedChange = { trackAge = it })
-                Text("Show age in video overlay (enter birthdate)")
-            }
-            if (trackAge) {
-                Spacer(Modifier.height(8.dp))
-                Row {
-                    NumberStepper(value = birthDay, range = 1..31, onChange = { birthDay = it }, label = "Day")
-                    Spacer(Modifier.width(8.dp))
-                    NumberStepper(value = birthMonth, range = 1..12, onChange = { birthMonth = it }, label = "Month")
-                    Spacer(Modifier.width(8.dp))
-                    NumberStepper(value = birthYear, range = 1900..2026, onChange = { birthYear = it }, label = "Year")
+            SectionHeader("Schedule")
+            SettingsCard {
+                SettingRow(
+                    title = "Reminder time",
+                    subtitle = "%02d:%02d".format(reminderMinute / 60, reminderMinute % 60),
+                    icon = Icons.Default.Alarm,
+                    onClick = { showTimePicker = true }
+                )
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Text("Which days?", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        Weekdays.label(daysMask),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    WeekdayPicker(
+                        mask = daysMask,
+                        onMaskChange = { if (Weekdays.count(it) > 0) daysMask = it }
+                    )
                 }
+                SettingRow(
+                    title = "Birthday (optional)",
+                    subtitle = birthDateMillis
+                        ?.let {
+                            Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
+                                .format(DateTimeFormatter.ofPattern("d MMMM yyyy"))
+                        }
+                        ?: "Lets videos show an age counter",
+                    icon = Icons.Default.Cake,
+                    onClick = { showBirthdayPicker = true }
+                )
             }
 
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(28.dp))
 
             Button(
                 onClick = {
-                    scope.launch {
-                        val birthMillis = if (trackAge) {
-                            runCatching {
-                                LocalDate.of(birthYear, birthMonth, birthDay)
-                                    .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                            }.getOrNull()
-                        } else null
-
-                        val project = viewModel.create(
-                            name = name.ifBlank { "Untitled" },
-                            birthDateMillis = birthMillis,
-                            reminderMinuteOfDay = hour * 60 + minute,
-                            colorArgb = color
-                        )
-                        ReminderScheduler.scheduleDaily(
-                            viewModel.getApplication(), project.id, project.reminderMinuteOfDay
-                        )
-                        onDone()
-                    }
+                    if (creating) return@Button
+                    creating = true
+                    viewModel.create(
+                        context = context,
+                        name = name.trim().ifBlank { "Untitled" },
+                        colorArgb = color,
+                        reminderMinuteOfDay = reminderMinute,
+                        activeDaysMask = daysMask,
+                        birthDateMillis = birthDateMillis,
+                        onCreated = onDone
+                    )
                 },
-                enabled = name.isNotBlank(),
-                modifier = Modifier.fillMaxWidth()
+                enabled = name.isNotBlank() && !creating,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
             ) { Text("Create") }
+
+            Spacer(Modifier.height(32.dp))
         }
     }
-}
 
-@Composable
-private fun NumberStepper(value: Int, range: IntRange, step: Int = 1, onChange: (Int) -> Unit, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = MaterialTheme.typography.labelSmall)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { onChange((value - step).coerceIn(range)) }) { Text("-") }
-            Text(value.toString().padStart(2, '0'), style = MaterialTheme.typography.titleMedium)
-            IconButton(onClick = { onChange((value + step).coerceIn(range)) }) { Text("+") }
+    if (showTimePicker) {
+        TimePickerDialog(
+            title = "Reminder time",
+            initialMinuteOfDay = reminderMinute,
+            onDismiss = { showTimePicker = false },
+            onConfirm = { minute ->
+                reminderMinute = minute
+                showTimePicker = false
+            }
+        )
+    }
+
+    if (showBirthdayPicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = birthDateMillis)
+        DatePickerDialog(
+            onDismissRequest = { showBirthdayPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    birthDateMillis = state.selectedDateMillis
+                    showBirthdayPicker = false
+                }) { Text("Set") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBirthdayPicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = state)
         }
     }
 }
 
 class CreateProjectViewModel(app: Application) : AndroidViewModel(app) {
-    private val repo get() = (getApplication<DayOneApp>()).repository
 
-    suspend fun create(
+    private val repo get() = getApplication<DayOneApp>().repository
+    private val settingsRepo get() = getApplication<DayOneApp>().settingsRepository
+
+    val settings: StateFlow<AppSettings> get() = settingsRepo.settings
+
+    fun create(
+        context: Context,
         name: String,
-        birthDateMillis: Long?,
+        colorArgb: Int,
         reminderMinuteOfDay: Int,
-        colorArgb: Int
-    ) = repo.createProject(name, birthDateMillis, reminderMinuteOfDay, colorArgb)
+        activeDaysMask: Int,
+        birthDateMillis: Long?,
+        onCreated: () -> Unit
+    ) {
+        viewModelScope.launch {
+            val defaults = settingsRepo.current
+            val project: Project = repo.createProject(
+                name = name,
+                birthDateMillis = birthDateMillis,
+                reminderMinuteOfDay = reminderMinuteOfDay,
+                colorArgb = colorArgb,
+                activeDaysMask = activeDaysMask,
+                nagIntervalMinutes = defaults.defaultNagIntervalMinutes,
+                nagUntilMinuteOfDay = defaults.defaultNagUntilMinuteOfDay
+            )
+            withContext(Dispatchers.IO) { ReminderScheduler.schedule(context, project) }
+            onCreated()
+        }
+    }
 }
-
-@Composable
-private fun viewModel_(): CreateProjectViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
-
-// Small local aliases to keep Modifier chain readable above without extra top-level imports clutter
-private fun Modifier.background_(color: Color) = this.then(Modifier.background(color = color))
-private fun Modifier.clickable_(onClick: () -> Unit) =
-    this.then(Modifier.clickable(onClick = onClick))

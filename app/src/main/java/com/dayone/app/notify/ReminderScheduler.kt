@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import com.dayone.app.DayOneApp
+import com.dayone.app.data.StreakCalculator
+import com.dayone.app.data.db.Project
 import kotlinx.coroutines.runBlocking
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -13,93 +15,141 @@ import java.time.LocalTime
 import java.time.ZoneId
 
 /**
- * Schedules, per project, a daily alarm at that project's reminder time. When the alarm fires
- * and the day's photo hasn't been taken yet, ReminderAlarmReceiver posts a notification and
- * re-arms a follow-up "nag" alarm every NAG_INTERVAL_MINUTES so you can't just dismiss and forget.
- * The nag stops the moment a photo is captured (see markDoneToday) or at end of day.
+ * Per-project reminder alarms.
+ *
+ * Each project has its own time of day, its own set of weekdays, and its own repeat
+ * ("nag") behaviour. Alarms are one-shot and re-armed as they fire, which is what lets
+ * a Mon/Wed/Sat schedule skip straight over Tuesday instead of firing and doing nothing.
  */
 object ReminderScheduler {
 
-    const val NAG_INTERVAL_MINUTES = 45L
     const val EXTRA_PROJECT_ID = "project_id"
-    const val EXTRA_IS_NAG = "is_nag"
+    const val EXTRA_KIND = "kind"
+
+    const val KIND_DAILY = 0
+    const val KIND_NAG = 1
+    const val KIND_SECOND = 2
+    const val KIND_SNOOZE = 3
+
+    /** Legacy default, still used when a project has no explicit interval. */
+    const val NAG_INTERVAL_MINUTES = 45L
+
+    // ---------------------------------------------------------------- scheduling
 
     fun rescheduleAll(context: Context) {
         val repo = (context.applicationContext as DayOneApp).repository
         runBlocking {
-            val projects = repo.getReminderEnabledProjects()
-            projects.forEach { scheduleDaily(context, it.id, it.reminderMinuteOfDay) }
-        }
-    }
-
-    fun scheduleDaily(context: Context, projectId: Long, minuteOfDay: Int) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val hour = minuteOfDay / 60
-        val minute = minuteOfDay % 60
-
-        var trigger = LocalDateTime.of(LocalDate.now(), LocalTime.of(hour, minute))
-        if (trigger.isBefore(LocalDateTime.now())) {
-            trigger = trigger.plusDays(1)
-        }
-        val triggerMillis = trigger.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-
-        val intent = baseIntent(context, projectId, isNag = false)
-        val pendingIntent = PendingIntent.getBroadcast(
-            context, requestCode(projectId, false), intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (alarmManager.canScheduleExactAlarms()) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMillis, pendingIntent)
-            } else {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMillis, pendingIntent)
+            repo.getAllProjects().forEach { project ->
+                cancelAll(context, project.id)
+                if (project.reminderEnabled && !project.archived) schedule(context, project)
             }
-        } else {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMillis, pendingIntent)
         }
     }
 
-    /** Arms the next nag alarm, NAG_INTERVAL_MINUTES from now, only fired while undone for today. */
-    fun scheduleNag(context: Context, projectId: Long) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val triggerMillis = System.currentTimeMillis() + NAG_INTERVAL_MINUTES * 60_000L
-
-        val intent = baseIntent(context, projectId, isNag = true)
-        val pendingIntent = PendingIntent.getBroadcast(
-            context, requestCode(projectId, true), intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMillis, pendingIntent)
+    fun schedule(context: Context, project: Project) {
+        if (!project.reminderEnabled || project.archived) {
+            cancelAll(context, project.id)
+            return
+        }
+        scheduleNextOccurrence(context, project, project.reminderMinuteOfDay, KIND_DAILY)
+        project.secondReminderMinuteOfDay?.let {
+            scheduleNextOccurrence(context, project, it, KIND_SECOND)
+        }
     }
 
-    /** Call once the photo is captured: cancels any pending nag and clears the notification. */
+    /** Convenience for callers that only have an id (e.g. after a notification action). */
+    fun scheduleById(context: Context, projectId: Long) {
+        val repo = (context.applicationContext as DayOneApp).repository
+        runBlocking { repo.getProject(projectId)?.let { schedule(context, it) } }
+    }
+
+    /**
+     * Arms the next firing of [minuteOfDay] on a day this project is actually scheduled
+     * for - today if that time hasn't passed yet, otherwise the next active weekday.
+     */
+    private fun scheduleNextOccurrence(context: Context, project: Project, minuteOfDay: Int, kind: Int) {
+        val now = LocalDateTime.now()
+        val time = LocalTime.of(minuteOfDay / 60, minuteOfDay % 60)
+
+        var candidateDate = LocalDate.now()
+        if (!LocalDateTime.of(candidateDate, time).isAfter(now)) {
+            candidateDate = candidateDate.plusDays(1)
+        }
+        val target = StreakCalculator.nextActiveDay(candidateDate, project.activeDaysMask) ?: return
+        val triggerMillis = LocalDateTime.of(target, time)
+            .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+        setAlarm(context, triggerMillis, pendingIntent(context, project.id, kind))
+    }
+
+    /** Arms the next repeat while today's photo is still outstanding. */
+    fun scheduleNag(context: Context, project: Project) {
+        if (!project.nagEnabled) return
+        val interval = project.nagIntervalMinutes.coerceAtLeast(5).toLong()
+        val next = LocalDateTime.now().plusMinutes(interval)
+        val cutoff = LocalDateTime.of(
+            LocalDate.now(),
+            LocalTime.of(project.nagUntilMinuteOfDay / 60, project.nagUntilMinuteOfDay % 60)
+        )
+        if (next.isAfter(cutoff)) return   // done pestering for today
+
+        val triggerMillis = next.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        setAlarm(context, triggerMillis, pendingIntent(context, project.id, KIND_NAG))
+    }
+
+    fun snooze(context: Context, projectId: Long, minutes: Int) {
+        val triggerMillis = System.currentTimeMillis() + minutes * 60_000L
+        setAlarm(context, triggerMillis, pendingIntent(context, projectId, KIND_SNOOZE))
+    }
+
+    /** Photo captured (or day skipped): stop repeating today and line up the next day. */
     fun markDoneToday(context: Context, projectId: Long) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = baseIntent(context, projectId, isNag = true)
-        val pendingIntent = PendingIntent.getBroadcast(
-            context, requestCode(projectId, true), intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        alarmManager.cancel(pendingIntent)
+        cancel(context, projectId, KIND_NAG)
+        cancel(context, projectId, KIND_SNOOZE)
+        ReminderNotifier.cancel(context, projectId)
+        scheduleById(context, projectId)
+    }
 
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-        nm.cancel(projectId.toInt())
+    fun cancelAll(context: Context, projectId: Long) {
+        listOf(KIND_DAILY, KIND_NAG, KIND_SECOND, KIND_SNOOZE).forEach { cancel(context, projectId, it) }
+        ReminderNotifier.cancel(context, projectId)
+    }
 
-        // Re-arm tomorrow's first reminder
-        runBlocking {
-            val repo = (context.applicationContext as DayOneApp).repository
-            val project = repo.getProject(projectId) ?: return@runBlocking
-            scheduleDaily(context, projectId, project.reminderMinuteOfDay)
+    private fun cancel(context: Context, projectId: Long, kind: Int) {
+        alarmManager(context).cancel(pendingIntent(context, projectId, kind))
+    }
+
+    // ---------------------------------------------------------------- plumbing
+
+    private fun setAlarm(context: Context, triggerMillis: Long, pendingIntent: PendingIntent) {
+        val am = alarmManager(context)
+        val canBeExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) am.canScheduleExactAlarms() else true
+        if (canBeExact) {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMillis, pendingIntent)
+        } else {
+            // Without the exact-alarm permission this still fires, just with some slack.
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMillis, pendingIntent)
         }
     }
 
-    private fun baseIntent(context: Context, projectId: Long, isNag: Boolean): Intent =
-        Intent(context, ReminderAlarmReceiver::class.java).apply {
-            putExtra(EXTRA_PROJECT_ID, projectId)
-            putExtra(EXTRA_IS_NAG, isNag)
-        }
+    private fun alarmManager(context: Context) =
+        context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-    private fun requestCode(projectId: Long, isNag: Boolean): Int =
-        (projectId.toInt() * 2) + if (isNag) 1 else 0
+    private fun pendingIntent(context: Context, projectId: Long, kind: Int): PendingIntent {
+        val intent = Intent(context, ReminderAlarmReceiver::class.java).apply {
+            // A distinct action per project+kind keeps PendingIntents from colliding,
+            // since extras alone are not part of PendingIntent identity.
+            action = "com.dayone.app.REMINDER_${projectId}_$kind"
+            putExtra(EXTRA_PROJECT_ID, projectId)
+            putExtra(EXTRA_KIND, kind)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            requestCode(projectId, kind),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    private fun requestCode(projectId: Long, kind: Int): Int = (projectId.toInt() * 10) + kind
 }

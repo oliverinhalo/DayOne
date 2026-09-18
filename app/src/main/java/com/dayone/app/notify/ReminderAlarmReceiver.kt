@@ -3,46 +3,58 @@ package com.dayone.app.notify
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.core.content.ContextCompat
 import com.dayone.app.DayOneApp
+import com.dayone.app.data.StreakCalculator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.LocalTime
 
+/**
+ * Fires for the daily reminder, the optional second reminder, a repeat, or a snooze.
+ * It re-arms the following day's alarm as it goes, so a one-shot exact alarm chain
+ * keeps running indefinitely without a repeating alarm (which Android delays heavily).
+ */
 class ReminderAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val projectId = intent.getLongExtra(ReminderScheduler.EXTRA_PROJECT_ID, -1L)
-        val isNag = intent.getBooleanExtra(ReminderScheduler.EXTRA_IS_NAG, false)
+        val kind = intent.getIntExtra(ReminderScheduler.EXTRA_KIND, ReminderScheduler.KIND_DAILY)
         if (projectId == -1L) return
 
         val pendingResult = goAsync()
+        val app = context.applicationContext as DayOneApp
+
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val repo = (context.applicationContext as DayOneApp).repository
-                val project = repo.getProject(projectId)
-                if (project == null || !project.reminderEnabled) return@launch
+                val project = app.repository.getProject(projectId) ?: return@launch
 
-                val already = repo.hasCapturedToday(project)
-                if (already) {
-                    // Nothing to nag about - safety net in case markDoneToday's cancel raced this alarm.
+                // Chain the next day's alarm first, so an early return below can never
+                // leave the project without a future reminder.
+                if (kind == ReminderScheduler.KIND_DAILY || kind == ReminderScheduler.KIND_SECOND) {
+                    ReminderScheduler.schedule(context, project)
+                }
+
+                if (!project.reminderEnabled || project.archived) return@launch
+
+                val today = LocalDate.now()
+                if (!StreakCalculator.isActive(today, project.activeDaysMask)) return@launch
+                if (app.settingsRepository.isSkipped(projectId, today.toEpochDay())) return@launch
+                if (app.repository.getEntryForDate(projectId, today) != null) {
+                    // Already shot today - nothing to nag about.
+                    ReminderNotifier.cancel(context, projectId)
                     return@launch
                 }
 
-                ReminderNotifier.notify(context, project)
+                val streak = app.streakFor(project)
+                ReminderNotifier.notify(
+                    context = context,
+                    project = project,
+                    dayNumber = app.repository.countForProject(projectId) + 1,
+                    currentStreak = streak
+                )
 
-                // Keep nagging every NAG_INTERVAL_MINUTES until midnight, then tomorrow's
-                // first daily alarm (already scheduled) takes over.
-                val stillToday = LocalDateTime.now().toLocalDate() == LocalDate.now()
-                val minutesLeftToday = java.time.Duration.between(
-                    LocalDateTime.now(), LocalDateTime.of(LocalDate.now(), LocalTime.MAX)
-                ).toMinutes()
-                if (stillToday && minutesLeftToday > ReminderScheduler.NAG_INTERVAL_MINUTES) {
-                    ReminderScheduler.scheduleNag(context, projectId)
-                }
+                ReminderScheduler.scheduleNag(context, project)
             } finally {
                 pendingResult.finish()
             }

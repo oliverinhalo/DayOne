@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 and below: what Auto Backup copies to the user's cloud backup so a
+  restore onto a new phone brings projects, photos and settings with it.
+-->
+<full-backup-content>
+    <include domain="database" path="." />
+    <include domain="sharedpref" path="." />
+    <include domain="external" path="DayOne/" />
+    <exclude domain="external" path="DayOne/exports/" />
+</full-backup-content>
