@@ -51,6 +51,7 @@ import com.dayone.app.data.db.Project
 import com.dayone.app.ui.components.ChoiceRow
 import com.dayone.app.ui.components.SectionHeader
 import com.dayone.app.ui.components.SettingsCard
+import com.dayone.app.ui.components.SliderRow
 import com.dayone.app.ui.components.SwitchRow
 import com.dayone.app.video.ExportManager
 import com.dayone.app.video.OverlayOptions
@@ -59,6 +60,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -166,17 +168,22 @@ fun VideoExportScreen(
                 )
                 ChoiceRow(
                     title = "Time per photo",
-                    options = listOf(100, 200, 300, 500, 1000),
+                    options = listOf(50, 80, 100, 150, 200, 330, 500, 1000),
                     selected = settings.videoMillisPerPhoto,
-                    label = { if (it >= 1000) "${it / 1000}s" else "${it}ms" },
+                    label = { paceLabel(it) },
                     onSelect = { viewModel.updateSettings { s -> s.copy(videoMillisPerPhoto = it) } }
                 )
-                ChoiceRow(
-                    title = "Quality",
-                    options = listOf(6, 12, 20, 30),
-                    selected = settings.videoQualityMbps,
-                    label = { "$it Mbps" },
-                    onSelect = { viewModel.updateSettings { s -> s.copy(videoQualityMbps = it) } }
+                SliderRow(
+                    title = "Fine tune pace",
+                    valueLabel = paceLabel(settings.videoMillisPerPhoto),
+                    value = settings.videoMillisPerPhoto.toFloat(),
+                    range = 30f..1000f,
+                    steps = 96,
+                    onValueChange = { value ->
+                        // Snap to 10ms so the label doesn't jitter between neighbouring frames.
+                        val ms = (value / 10f).roundToInt() * 10
+                        viewModel.updateSettings { it.copy(videoMillisPerPhoto = ms.coerceIn(30, 1000)) }
+                    }
                 )
                 SwitchRow(
                     title = "Crossfade between days",
@@ -329,6 +336,16 @@ fun VideoExportScreen(
 
             Spacer(Modifier.height(32.dp))
         }
+    }
+}
+
+/** "120ms" reads as nothing to most people; "8 photos/sec" does. */
+private fun paceLabel(millis: Int): String {
+    val perSecond = 1000f / millis
+    return when {
+        millis >= 1000 -> "${millis / 1000}s each"
+        perSecond >= 2f -> "${millis}ms  (${perSecond.roundToInt()}/sec)"
+        else -> "${millis}ms"
     }
 }
 

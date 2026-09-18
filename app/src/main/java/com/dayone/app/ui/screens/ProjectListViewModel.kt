@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dayone.app.DayOneApp
+import com.dayone.app.ShortcutPublisher
 import com.dayone.app.data.StreakCalculator
 import com.dayone.app.data.StreakStats
 import com.dayone.app.data.db.PhotoEntry
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -62,7 +64,16 @@ class ProjectListViewModel(app: Application) : AndroidViewModel(app) {
                     skippedToday = settings.isSkipped(project.id, today.toEpochDay())
                 )
             }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        }
+            .onEach { cards ->
+                // Keep the launcher long-press menu pointing at whatever still needs shooting.
+                ShortcutPublisher.publish(
+                    context = getApplication(),
+                    projects = cards.map { it.project },
+                    doneToday = cards.filter { it.stats.doneToday }.map { it.project.id }.toSet()
+                )
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val activeCards: StateFlow<List<ProjectCardState>> = cards
         .map { list -> list.filter { !it.project.archived } }

@@ -246,6 +246,14 @@ class CaptureViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setFaceGuide(show: Boolean) = settingsRepo.update { it.copy(showFaceGuide = show) }
 
+    fun setFaceGuideScale(scale: Float) = settingsRepo.update { it.copy(faceGuideScale = scale) }
+
+    fun setGhostScale(scale: Float) = settingsRepo.update { it.copy(ghostScale = scale) }
+
+    fun setFaceLight(on: Boolean) = settingsRepo.update { it.copy(faceLight = on) }
+
+    fun setFaceLightIntensity(level: Float) = settingsRepo.update { it.copy(faceLightIntensity = level) }
+
     fun setGhostFlip(flip: Boolean) = settingsRepo.update { it.copy(ghostFlip = flip) }
 
     fun nudgeGhost(dx: Float, dy: Float) = settingsRepo.update {

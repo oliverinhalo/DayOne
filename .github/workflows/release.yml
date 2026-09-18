@@ -40,8 +40,8 @@ jobs:
       - name: Unit tests
         run: ./gradlew :app:testDebugUnitTest
 
-      - name: Build signed release APK
-        run: ./gradlew :app:assembleRelease
+      - name: Build signed release APK and Play bundle
+        run: ./gradlew :app:assembleRelease :app:bundleRelease
 
       - name: Work out the tag and name the APK after it
         id: naming
@@ -57,7 +57,8 @@ jobs:
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           cp app/build/outputs/apk/release/app-release.apk "DayOne-$TAG.apk"
-          ls -lh "DayOne-$TAG.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "DayOne-$TAG.aab"
+          ls -lh "DayOne-$TAG.apk" "DayOne-$TAG.aab"
 
       - name: Publish the release
         env:
@@ -66,9 +67,9 @@ jobs:
           set -euo pipefail
           TAG="${{ steps.naming.outputs.tag }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "DayOne-$TAG.apk" --clobber
+            gh release upload "$TAG" "DayOne-$TAG.apk" "DayOne-$TAG.aab" --clobber
           else
-            gh release create "$TAG" "DayOne-$TAG.apk" \
+            gh release create "$TAG" "DayOne-$TAG.apk" "DayOne-$TAG.aab" \
               --target "$GITHUB_SHA" \
               --title "DayOne $TAG" \
               --notes-file CHANGELOG.md

@@ -11,6 +11,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +41,7 @@ import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -58,6 +60,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +69,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -77,8 +82,10 @@ import com.dayone.app.data.GhostMode
 import com.dayone.app.data.GhostReference
 import com.dayone.app.data.GridMode
 import com.dayone.app.ui.components.ChoiceRow
+import com.dayone.app.ui.components.SliderRow
 import com.dayone.app.ui.components.SwitchRow
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -121,8 +128,30 @@ fun CaptureScreen(
     var usingFront by remember { mutableStateOf(settings.useFrontCamera) }
 
     DisposableEffect(Unit) {
-        cameraController.bind(lifecycleOwner, previewView, front = usingFront) { cameraReady = true }
+        cameraController.bind(
+            lifecycleOwner = lifecycleOwner,
+            previewView = previewView,
+            front = usingFront,
+            onReady = { cameraReady = true },
+            onError = { cameraReady = false }
+        )
         onDispose { cameraController.shutdown() }
+    }
+
+    // Screen-as-fill-light: push the window to full brightness while it's on.
+    DisposableEffect(settings.faceLight, settings.faceLightIntensity) {
+        val window = (context as? android.app.Activity)?.window
+        val previous = window?.attributes?.screenBrightness
+        if (window != null && settings.faceLight) {
+            window.attributes = window.attributes.apply {
+                screenBrightness = settings.faceLightIntensity.coerceIn(0.2f, 1f)
+            }
+        }
+        onDispose {
+            if (window != null && previous != null) {
+                window.attributes = window.attributes.apply { screenBrightness = previous }
+            }
+        }
     }
 
     // Composing a photo takes a moment - don't let the screen blank out mid-pose.
@@ -134,7 +163,7 @@ fun CaptureScreen(
     var adjustOverlayMode by remember { mutableStateOf(false) }
     var showTuning by remember { mutableStateOf(false) }
     var countdownRemaining by remember { mutableIntStateOf(0) }
-    var shutterRequested by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     fun haptic() {
         if (settings.haptics) view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -149,17 +178,18 @@ fun CaptureScreen(
     }
 
     // Countdown timer, so you can put the phone down and get into frame.
-    LaunchedEffect(shutterRequested) {
-        if (!shutterRequested) return@LaunchedEffect
-        if (settings.countdownSeconds > 0) {
-            countdownRemaining = settings.countdownSeconds
-            while (countdownRemaining > 0) {
-                delay(1000)
-                countdownRemaining--
+    fun requestShot() {
+        if (countdownRemaining > 0) return
+        scope.launch {
+            if (settings.countdownSeconds > 0) {
+                countdownRemaining = settings.countdownSeconds
+                while (countdownRemaining > 0) {
+                    delay(1000)
+                    countdownRemaining--
+                }
             }
+            shoot()
         }
-        shoot()
-        shutterRequested = false
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
@@ -236,6 +266,13 @@ fun CaptureScreen(
                 )
                 Spacer(Modifier.width(8.dp))
             }
+            GlassIconButton(
+                Icons.Default.WbSunny,
+                "Face light",
+                highlighted = settings.faceLight,
+                onClick = { viewModel.setFaceLight(!settings.faceLight) }
+            )
+            Spacer(Modifier.width(8.dp))
             GlassIconButton(Icons.Default.Cameraswitch, "Flip camera", onClick = {
                 cameraController.toggleCamera(lifecycleOwner, previewView) { front ->
                     usingFront = front
@@ -340,7 +377,7 @@ fun CaptureScreen(
                 ShutterButton(
                     enabled = cameraReady && !state.saving && countdownRemaining == 0,
                     busy = state.saving,
-                    onClick = { shutterRequested = true }
+                    onClick = { requestShot() }
                 )
 
                 Row {
@@ -449,12 +486,43 @@ fun CaptureScreen(
                     label = { it.label },
                     onSelect = { viewModel.setGridMode(it) }
                 )
+                SliderRow(
+                    title = "Overlay size",
+                    valueLabel = "${(settings.ghostScale * 100).toInt()}%",
+                    value = settings.ghostScale,
+                    range = 0.4f..3f,
+                    onValueChange = { viewModel.setGhostScale(it) }
+                )
                 SwitchRow(
                     title = "Head guide oval",
                     subtitle = "Shows where the auto-crop will put your face",
                     checked = settings.showFaceGuide,
                     onCheckedChange = { viewModel.setFaceGuide(it) }
                 )
+                if (settings.showFaceGuide) {
+                    SliderRow(
+                        title = "Guide oval size",
+                        valueLabel = "${(settings.faceGuideScale * 100).toInt()}%",
+                        value = settings.faceGuideScale,
+                        range = 0.4f..2f,
+                        onValueChange = { viewModel.setFaceGuideScale(it) }
+                    )
+                }
+                SwitchRow(
+                    title = "Face light",
+                    subtitle = "Turns the screen around the frame into a soft light for dim rooms",
+                    checked = settings.faceLight,
+                    onCheckedChange = { viewModel.setFaceLight(it) }
+                )
+                if (settings.faceLight) {
+                    SliderRow(
+                        title = "Face light brightness",
+                        valueLabel = "${(settings.faceLightIntensity * 100).toInt()}%",
+                        value = settings.faceLightIntensity,
+                        range = 0.2f..1f,
+                        onValueChange = { viewModel.setFaceLightIntensity(it) }
+                    )
+                }
                 SwitchRow(
                     title = "Mirror the overlay",
                     subtitle = "Use if the reference photo was taken on the other camera",
@@ -546,9 +614,8 @@ private fun ShutterButton(enabled: Boolean, busy: Boolean, onClick: () -> Unit) 
             .size(78.dp)
             .clip(CircleShape)
             .background(Color.White.copy(alpha = if (enabled) 0.95f else 0.5f))
-            .pointerInput(enabled) {
-                detectTapGestures { if (enabled) onClick() }
-            },
+            .clickable(enabled = enabled, onClick = onClick)
+            .semantics { contentDescription = "Take photo" },
         contentAlignment = Alignment.Center
     ) {
         Box(

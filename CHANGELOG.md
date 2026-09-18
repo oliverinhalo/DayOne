@@ -1,3 +1,57 @@
+# DayOne 2.1
+
+Fixes the shutter, makes the overlay and video pace adjustable, adds a screen-based face
+light, and puts the app in shape for a Play Store listing.
+
+## Fixed
+
+- **The shutter button did nothing.** `CameraController.bind(...)` was called with a
+  trailing lambda, which bound to its `onError` parameter instead of `onReady`, so
+  `cameraReady` never flipped to true and the button stayed disabled for ever. The call
+  now names its arguments, and the button is an ordinary `clickable` with a proper
+  "Take photo" content description.
+
+## Updating keeps everything
+
+The database schema is byte-identical to 2.0 (same Room identity hash), every new setting
+is a preference with a default, and photo paths, package name and signing key are
+unchanged. Updating over 2.0 keeps all projects, photos, notes, streaks and settings. A
+1.x install still gets the non-destructive 1 → 2 migration.
+
+## Video pace
+
+- Time per photo now has quick presets (50ms / 80 / 100 / 150 / 200 / 330 / 500 / 1s) plus
+  a fine-tune slider from 30ms to 1s in 10ms steps, labelled in photos-per-second.
+- The Mbps quality picker is gone. Bitrate is derived from the resolution and frame rate,
+  which is the only thing that was really being chosen.
+
+## Capture
+
+- **Face light** — the area around the crop frame becomes a soft white panel and the
+  screen goes to full brightness, lighting your face in a dim room. Toggle in the top bar,
+  brightness adjustable.
+- **Guide oval size** is now adjustable on its own, separately from the crop tightness.
+- **Overlay size** has a slider as well as the existing pinch gesture.
+
+## Ready to publish
+
+- First-run onboarding: what the app does, terms and privacy acceptance, then camera and
+  notification permission priming with reasons. Re-runs if the terms change.
+- Terms of use, privacy policy and open-source licences are readable inside the app -
+  it has no internet permission, so a hosted page would be unreachable - and mirrored in
+  `PRIVACY.md` and `TERMS.md` for the Play listing.
+- `USE_EXACT_ALARM` dropped from the manifest: Play restricts it to alarm-clock apps and
+  declaring it is grounds for rejection. Reminders use the user-granted
+  `SCHEDULE_EXACT_ALARM` and fall back to inexact alarms.
+- Releases now also build an `.aab` App Bundle for Play alongside the sideload `.apk`.
+- `docs/play-store.md` carries the listing copy, the data-safety answers ("no data
+  collected", "no data shared"), permission justifications and a pre-launch checklist.
+- Birthday picker starts 18 years ago instead of today.
+- Long-press the launcher icon for shortcuts straight into the projects that still need a
+  photo today.
+
+---
+
 # DayOne 2.0
 
 A big pass over every part of the app: settings you can actually change, an overlay that

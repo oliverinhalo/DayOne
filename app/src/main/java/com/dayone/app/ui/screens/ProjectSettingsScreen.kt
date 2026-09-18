@@ -338,7 +338,10 @@ fun ProjectSettingsScreen(
     }
 
     if (showBirthdayPicker) {
-        val state = rememberDatePickerState(initialSelectedDateMillis = current.birthDateMillis)
+        val state = rememberDatePickerState(
+            initialSelectedDateMillis = current.birthDateMillis ?: defaultBirthdayMillis(),
+            yearRange = 1900..LocalDate.now().year
+        )
         DatePickerDialog(
             onDismissRequest = { showBirthdayPicker = false },
             confirmButton = {

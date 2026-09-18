@@ -66,8 +66,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+
+/** 18 years ago today - a sane starting point for a birthday picker. */
+internal fun defaultBirthdayMillis(): Long =
+    LocalDate.now().minusYears(18).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
 private val palette = listOf(
     0xFF00E5A0.toInt(), 0xFF4FC3F7.toInt(), 0xFFFFB74D.toInt(),
@@ -218,7 +223,12 @@ fun CreateProjectScreen(
     }
 
     if (showBirthdayPicker) {
-        val state = rememberDatePickerState(initialSelectedDateMillis = birthDateMillis)
+        val state = rememberDatePickerState(
+            // Most people setting up an age counter are adults, so start the picker
+            // somewhere useful instead of on today's date.
+            initialSelectedDateMillis = birthDateMillis ?: defaultBirthdayMillis(),
+            yearRange = 1900..LocalDate.now().year
+        )
         DatePickerDialog(
             onDismissRequest = { showBirthdayPicker = false },
             confirmButton = {

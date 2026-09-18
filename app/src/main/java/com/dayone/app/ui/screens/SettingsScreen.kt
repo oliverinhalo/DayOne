@@ -30,11 +30,16 @@ import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Brightness6
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Gavel
+import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.RestorePage
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -77,6 +82,7 @@ import com.dayone.app.ui.components.ConfirmDialog
 import com.dayone.app.ui.components.SectionHeader
 import com.dayone.app.ui.components.SettingRow
 import com.dayone.app.ui.components.SettingsCard
+import com.dayone.app.ui.components.SliderRow
 import com.dayone.app.ui.components.SwitchRow
 import com.dayone.app.ui.components.TimePickerDialog
 import com.dayone.app.ui.components.WeekdayPicker
@@ -102,6 +108,10 @@ private val accentPalette = listOf(
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onReplayIntro: () -> Unit = {},
+    onOpenTerms: () -> Unit = {},
+    onOpenPrivacy: () -> Unit = {},
+    onOpenLicences: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -231,6 +241,37 @@ fun SettingsScreen(
                     title = "Head guide oval",
                     checked = settings.showFaceGuide
                 ) { value -> viewModel.update { it.copy(showFaceGuide = value) } }
+                if (settings.showFaceGuide) {
+                    SliderRow(
+                        title = "Guide oval size",
+                        valueLabel = "${(settings.faceGuideScale * 100).toInt()}%",
+                        value = settings.faceGuideScale,
+                        range = 0.4f..2f,
+                        onValueChange = { value -> viewModel.update { it.copy(faceGuideScale = value) } }
+                    )
+                }
+                SliderRow(
+                    title = "Overlay size",
+                    valueLabel = "${(settings.ghostScale * 100).toInt()}%",
+                    value = settings.ghostScale,
+                    range = 0.4f..3f,
+                    onValueChange = { value -> viewModel.update { it.copy(ghostScale = value) } }
+                )
+                SwitchRow(
+                    title = "Face light",
+                    subtitle = "Lights your face with the screen itself in dim rooms",
+                    checked = settings.faceLight,
+                    icon = Icons.Default.WbSunny
+                ) { value -> viewModel.update { it.copy(faceLight = value) } }
+                if (settings.faceLight) {
+                    SliderRow(
+                        title = "Face light brightness",
+                        valueLabel = "${(settings.faceLightIntensity * 100).toInt()}%",
+                        value = settings.faceLightIntensity,
+                        range = 0.2f..1f,
+                        onValueChange = { value -> viewModel.update { it.copy(faceLightIntensity = value) } }
+                    )
+                }
                 SwitchRow(
                     title = "Review before saving",
                     subtitle = "Check the shot and retake it before it counts for the day",
@@ -338,6 +379,29 @@ fun SettingsScreen(
                     title = "Where photos live",
                     subtitle = "Android/data/${context.packageName}/files/DayOne"
                 )
+                SettingRow(
+                    title = "Show the intro again",
+                    subtitle = "Replay the welcome tour and permission prompts",
+                    icon = Icons.Default.Replay,
+                    onClick = onReplayIntro
+                )
+                SettingRow(
+                    title = "Privacy policy",
+                    subtitle = "What is stored, and why nothing leaves the phone",
+                    icon = Icons.Default.Policy,
+                    onClick = onOpenPrivacy
+                )
+                SettingRow(
+                    title = "Terms of use",
+                    icon = Icons.Default.Gavel,
+                    onClick = onOpenTerms
+                )
+                SettingRow(
+                    title = "Open source licences",
+                    subtitle = "AndroidX, Jetpack Compose, CameraX, Room, Coil, ML Kit",
+                    icon = Icons.Default.Code,
+                    onClick = onOpenLicences
+                )
             }
 
             Spacer(Modifier.height(40.dp))
@@ -428,6 +492,10 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun update(transform: (AppSettings) -> AppSettings) = settingsRepo.update(transform)
+
+    fun completeOnboarding() = settingsRepo.update {
+        it.copy(onboardingComplete = true, acceptedTermsVersion = Legal.TERMS_VERSION)
+    }
 
     fun exportBackup(context: Context) {
         if (_busy.value) return

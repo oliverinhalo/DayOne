@@ -48,8 +48,15 @@ updates. It is a self-signed sideload key for a private, offline app, not a Play
 - **Backup, restore and import** — export everything to a `.zip` in `Documents/DayOne`
   (outside the app, so it survives an uninstall), restore it later, or bulk-import existing
   photos whose dates come from their filenames or EXIF data.
+- **Face light** — the screen around the crop frame turns into a soft white panel at full
+  brightness, so a dim room still gets a usable photo.
 - **Theming** — system/light/dark, pure-black dark mode, Material You dynamic colour, or a
   fixed accent colour.
+- **First-run onboarding** with terms and privacy acceptance, and permission priming that
+  explains why each one is needed. Terms, privacy policy and open-source licences are all
+  readable inside the app, since it has no way to open a web page.
+- **Launcher shortcuts** — long-press the icon to jump straight into whichever project
+  still needs a photo today.
 
 ## Project structure
 
@@ -72,6 +79,7 @@ sync, then **Build → Build App Bundle(s) / APK(s) → Build APK(s)**. From the
 
 ```bash
 ./gradlew :app:assembleRelease      # signed APK at app/build/outputs/apk/release/
+./gradlew :app:bundleRelease        # Play App Bundle at app/build/outputs/bundle/release/
 ./gradlew :app:testDebugUnitTest    # unit tests
 ./gradlew :app:lintDebug            # lint
 ```
@@ -87,6 +95,15 @@ git tag v2.1 && git push origin v2.1
 The `Release APK` workflow builds, tests and publishes `DayOne-v2.1.apk` to a GitHub
 Release. Bump `versionCode` / `versionName` in `app/build.gradle.kts` first — Android
 refuses to install an update whose `versionCode` isn't higher than the installed one.
+
+## Publishing to Google Play
+
+`docs/play-store.md` has the listing copy, the data-safety answers, permission
+justifications and a pre-launch checklist. `PRIVACY.md` and `TERMS.md` mirror the text
+shown inside the app and are what the Play listing should link to. Read the **Signing**
+section there before the first upload: the key in `keystore/` is checked in so sideload
+updates always install in place, which is fine for an upload key under Play App Signing
+but must not stay in the repo if it is also the app signing key.
 
 ## First-run setup on your phone
 

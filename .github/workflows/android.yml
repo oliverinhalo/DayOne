@@ -27,8 +27,8 @@ jobs:
       - name: Lint
         run: ./gradlew :app:lintDebug
 
-      - name: Assemble release APK
-        run: ./gradlew :app:assembleRelease
+      - name: Assemble release APK and Play bundle
+        run: ./gradlew :app:assembleRelease :app:bundleRelease
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

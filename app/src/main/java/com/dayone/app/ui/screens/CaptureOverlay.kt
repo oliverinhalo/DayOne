@@ -41,7 +41,13 @@ fun CaptureOverlay(
     Canvas(modifier = modifier) {
         val frame = frameRect(size)
 
-        if (settings.showFrameBox) drawOutsideScrim(frame)
+        // With face light on, the area outside the crop turns into a soft white panel that
+        // lights the subject from the screen itself - the usual front-camera trick.
+        if (settings.faceLight) {
+            drawOutsideScrim(frame, Color.White.copy(alpha = settings.faceLightIntensity.coerceIn(0.1f, 1f)))
+        } else if (settings.showFrameBox) {
+            drawOutsideScrim(frame, Color.Black.copy(alpha = 0.42f))
+        }
 
         val ghost = when (settings.ghostMode) {
             GhostMode.OFF -> null
@@ -63,7 +69,9 @@ fun CaptureOverlay(
         }
 
         if (settings.gridMode != GridMode.NONE) drawGrid(frame, settings.gridMode)
-        if (settings.showFaceGuide) drawFaceGuide(frame, headFraction)
+        if (settings.showFaceGuide) {
+            drawFaceGuide(frame, headFraction * settings.faceGuideScale.coerceIn(0.4f, 2f))
+        }
         if (settings.showFrameBox) drawFrameCorners(frame)
     }
 }
@@ -78,8 +86,7 @@ private fun frameRect(size: Size): Rect {
     return Rect(left, top, left + side, top + side)
 }
 
-private fun DrawScope.drawOutsideScrim(frame: Rect) {
-    val scrim = Color.Black.copy(alpha = 0.42f)
+private fun DrawScope.drawOutsideScrim(frame: Rect, scrim: Color) {
     if (frame.top > 0f) {
         drawRect(scrim, topLeft = Offset.Zero, size = Size(size.width, frame.top))
     }

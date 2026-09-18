@@ -46,9 +46,17 @@ class VideoExporter(
     private val size: Int = 1080,
     private val fps: Int = 30,
     private val millisPerPhoto: Int = 300,
-    private val bitRate: Int = 12_000_000,
     private val crossfade: Boolean = true
 ) {
+
+    /**
+     * Bitrate is derived rather than asked for. A timelapse of stills is mostly I-frames,
+     * so it needs a generous rate for its pixel count, and "how many Mbps" is not a
+     * question anyone should have to answer to make a video of their face.
+     */
+    private val bitRate: Int = (size.toLong() * size * fps / 8L)
+        .coerceIn(4_000_000L, 40_000_000L)
+        .toInt()
 
     private var muxerStarted = false
     private var muxerTrackIndex = -1

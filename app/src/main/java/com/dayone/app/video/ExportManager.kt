@@ -78,7 +78,6 @@ object ExportManager {
                     size = settings.videoResolution,
                     fps = settings.videoFps,
                     millisPerPhoto = settings.videoMillisPerPhoto,
-                    bitRate = settings.videoQualityMbps * 1_000_000,
                     crossfade = settings.videoCrossfade
                 )
 

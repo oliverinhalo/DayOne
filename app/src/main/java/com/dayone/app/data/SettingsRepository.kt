@@ -74,6 +74,8 @@ data class AppSettings(
     val ghostOffsetY: Float = 0f,
     val gridMode: GridMode = GridMode.THIRDS,
     val showFaceGuide: Boolean = true,
+    /** Size of the head-guide oval relative to the crop frame, independent of the crop. */
+    val faceGuideScale: Float = 1.0f,
     val showFrameBox: Boolean = true,
 
     // Capture behaviour
@@ -84,6 +86,9 @@ data class AppSettings(
     val haptics: Boolean = true,
     val useFrontCamera: Boolean = true,
     val saveCopyToGallery: Boolean = false,
+    /** Screen-as-fill-light for front-camera shots in poor light. */
+    val faceLight: Boolean = false,
+    val faceLightIntensity: Float = 0.75f,
 
     // Defaults applied to newly created projects
     val defaultReminderMinuteOfDay: Int = 480,
@@ -96,9 +101,13 @@ data class AppSettings(
     val videoFps: Int = 30,
     val videoMillisPerPhoto: Int = 300,
     val videoCrossfade: Boolean = true,
-    val videoQualityMbps: Int = 12,
     val videoNewestFirst: Boolean = false,
-    val videoSaveToGallery: Boolean = true
+    val videoSaveToGallery: Boolean = true,
+
+    // First-run state
+    /** Version of the terms the user accepted; 0 = never accepted. */
+    val acceptedTermsVersion: Int = 0,
+    val onboardingComplete: Boolean = false
 )
 
 class SettingsRepository(context: Context) {
@@ -171,6 +180,7 @@ class SettingsRepository(context: Context) {
             ghostOffsetY = prefs.getFloat(K_GHOST_DY, d.ghostOffsetY),
             gridMode = enumOf(prefs.getString(K_GRID, null), GridMode.entries, d.gridMode),
             showFaceGuide = prefs.getBoolean(K_FACE_GUIDE, d.showFaceGuide),
+            faceGuideScale = prefs.getFloat(K_FACE_GUIDE_SCALE, d.faceGuideScale),
             showFrameBox = prefs.getBoolean(K_FRAME_BOX, d.showFrameBox),
             countdownSeconds = prefs.getInt(K_COUNTDOWN, d.countdownSeconds),
             reviewBeforeSave = prefs.getBoolean(K_REVIEW, d.reviewBeforeSave),
@@ -179,6 +189,8 @@ class SettingsRepository(context: Context) {
             haptics = prefs.getBoolean(K_HAPTICS, d.haptics),
             useFrontCamera = prefs.getBoolean(K_FRONT, d.useFrontCamera),
             saveCopyToGallery = prefs.getBoolean(K_GALLERY, d.saveCopyToGallery),
+            faceLight = prefs.getBoolean(K_FACE_LIGHT, d.faceLight),
+            faceLightIntensity = prefs.getFloat(K_FACE_LIGHT_LEVEL, d.faceLightIntensity),
             defaultReminderMinuteOfDay = prefs.getInt(K_DEF_REMIND, d.defaultReminderMinuteOfDay),
             defaultActiveDaysMask = prefs.getInt(K_DEF_DAYS, d.defaultActiveDaysMask),
             defaultNagIntervalMinutes = prefs.getInt(K_DEF_NAG, d.defaultNagIntervalMinutes),
@@ -187,9 +199,10 @@ class SettingsRepository(context: Context) {
             videoFps = prefs.getInt(K_VID_FPS, d.videoFps),
             videoMillisPerPhoto = prefs.getInt(K_VID_MS, d.videoMillisPerPhoto),
             videoCrossfade = prefs.getBoolean(K_VID_FADE, d.videoCrossfade),
-            videoQualityMbps = prefs.getInt(K_VID_MBPS, d.videoQualityMbps),
             videoNewestFirst = prefs.getBoolean(K_VID_REVERSE, d.videoNewestFirst),
-            videoSaveToGallery = prefs.getBoolean(K_VID_GALLERY, d.videoSaveToGallery)
+            videoSaveToGallery = prefs.getBoolean(K_VID_GALLERY, d.videoSaveToGallery),
+            acceptedTermsVersion = prefs.getInt(K_TERMS, d.acceptedTermsVersion),
+            onboardingComplete = prefs.getBoolean(K_ONBOARDED, d.onboardingComplete)
         )
     }
 
@@ -208,6 +221,7 @@ class SettingsRepository(context: Context) {
             .putFloat(K_GHOST_DY, s.ghostOffsetY)
             .putString(K_GRID, s.gridMode.name)
             .putBoolean(K_FACE_GUIDE, s.showFaceGuide)
+            .putFloat(K_FACE_GUIDE_SCALE, s.faceGuideScale)
             .putBoolean(K_FRAME_BOX, s.showFrameBox)
             .putInt(K_COUNTDOWN, s.countdownSeconds)
             .putBoolean(K_REVIEW, s.reviewBeforeSave)
@@ -216,6 +230,8 @@ class SettingsRepository(context: Context) {
             .putBoolean(K_HAPTICS, s.haptics)
             .putBoolean(K_FRONT, s.useFrontCamera)
             .putBoolean(K_GALLERY, s.saveCopyToGallery)
+            .putBoolean(K_FACE_LIGHT, s.faceLight)
+            .putFloat(K_FACE_LIGHT_LEVEL, s.faceLightIntensity)
             .putInt(K_DEF_REMIND, s.defaultReminderMinuteOfDay)
             .putInt(K_DEF_DAYS, s.defaultActiveDaysMask)
             .putInt(K_DEF_NAG, s.defaultNagIntervalMinutes)
@@ -224,9 +240,10 @@ class SettingsRepository(context: Context) {
             .putInt(K_VID_FPS, s.videoFps)
             .putInt(K_VID_MS, s.videoMillisPerPhoto)
             .putBoolean(K_VID_FADE, s.videoCrossfade)
-            .putInt(K_VID_MBPS, s.videoQualityMbps)
             .putBoolean(K_VID_REVERSE, s.videoNewestFirst)
             .putBoolean(K_VID_GALLERY, s.videoSaveToGallery)
+            .putInt(K_TERMS, s.acceptedTermsVersion)
+            .putBoolean(K_ONBOARDED, s.onboardingComplete)
             .apply()
     }
 
@@ -252,6 +269,9 @@ class SettingsRepository(context: Context) {
         private const val K_GHOST_DY = "ghost_dy"
         private const val K_GRID = "grid_mode"
         private const val K_FACE_GUIDE = "face_guide"
+        private const val K_FACE_GUIDE_SCALE = "face_guide_scale"
+        private const val K_FACE_LIGHT = "face_light"
+        private const val K_FACE_LIGHT_LEVEL = "face_light_level"
         private const val K_FRAME_BOX = "frame_box"
         private const val K_COUNTDOWN = "countdown_seconds"
         private const val K_REVIEW = "review_before_save"
@@ -268,7 +288,8 @@ class SettingsRepository(context: Context) {
         private const val K_VID_FPS = "video_fps"
         private const val K_VID_MS = "video_ms_per_photo"
         private const val K_VID_FADE = "video_crossfade"
-        private const val K_VID_MBPS = "video_mbps"
+        private const val K_TERMS = "accepted_terms_version"
+        private const val K_ONBOARDED = "onboarding_complete"
         private const val K_VID_REVERSE = "video_newest_first"
         private const val K_VID_GALLERY = "video_save_gallery"
     }

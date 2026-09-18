@@ -30,6 +30,9 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.dayone.app.ui.screens.CaptureScreen
 import com.dayone.app.ui.screens.CreateProjectScreen
+import com.dayone.app.ui.screens.LegalScreen
+import com.dayone.app.ui.screens.LicencesScreen
+import com.dayone.app.ui.screens.OnboardingScreen
 import com.dayone.app.ui.screens.ProjectHomeScreen
 import com.dayone.app.ui.screens.ProjectListScreen
 import com.dayone.app.ui.screens.ProjectSettingsScreen
@@ -85,7 +88,16 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                AppNavHost(navController = navController, startCaptureProjectId = startCaptureId)
+                // Terms have to be accepted before anything else opens, and a bumped
+                // TERMS_VERSION re-prompts an existing install without touching its data.
+                val needsOnboarding = !settings.onboardingComplete ||
+                    settings.acceptedTermsVersion < com.dayone.app.ui.screens.Legal.TERMS_VERSION
+
+                AppNavHost(
+                    navController = navController,
+                    startCaptureProjectId = startCaptureId,
+                    needsOnboarding = needsOnboarding
+                )
             }
         }
     }
@@ -100,19 +112,41 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun AppNavHost(navController: NavHostController, startCaptureProjectId: Long?) {
+fun AppNavHost(
+    navController: NavHostController,
+    startCaptureProjectId: Long?,
+    needsOnboarding: Boolean = false
+) {
     val slideIn = AnimatedContentTransitionScope.SlideDirection.Start
     val slideOut = AnimatedContentTransitionScope.SlideDirection.End
 
     NavHost(
         navController = navController,
-        startDestination = if (startCaptureProjectId != null) "capture/$startCaptureProjectId" else "projects",
+        startDestination = when {
+            needsOnboarding -> "onboarding"
+            startCaptureProjectId != null -> "capture/$startCaptureProjectId"
+            else -> "projects"
+        },
         modifier = Modifier,
         enterTransition = { slideIntoContainer(slideIn, tween(260)) + fadeIn(tween(200)) },
         exitTransition = { fadeOut(tween(160)) },
         popEnterTransition = { fadeIn(tween(200)) },
         popExitTransition = { slideOutOfContainer(slideOut, tween(260)) + fadeOut(tween(200)) }
     ) {
+        composable("onboarding") {
+            OnboardingScreen(
+                onFinished = {
+                    navController.navigate("projects") {
+                        popUpTo("onboarding") { inclusive = true }
+                    }
+                },
+                onOpenTerms = { navController.navigate("terms") },
+                onOpenPrivacy = { navController.navigate("privacy") }
+            )
+        }
+        composable("terms") { LegalScreen(privacy = false, onBack = { navController.popBackStack() }) }
+        composable("privacy") { LegalScreen(privacy = true, onBack = { navController.popBackStack() }) }
+        composable("licences") { LicencesScreen(onBack = { navController.popBackStack() }) }
         composable("projects") {
             ProjectListScreen(
                 onOpenProject = { id -> navController.navigate("project/$id") },
@@ -122,7 +156,13 @@ fun AppNavHost(navController: NavHostController, startCaptureProjectId: Long?) {
             )
         }
         composable("settings") {
-            SettingsScreen(onBack = { navController.popBackStack() })
+            SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onReplayIntro = { navController.navigate("onboarding") },
+                onOpenTerms = { navController.navigate("terms") },
+                onOpenPrivacy = { navController.navigate("privacy") },
+                onOpenLicences = { navController.navigate("licences") }
+            )
         }
         composable("createProject") {
             CreateProjectScreen(
