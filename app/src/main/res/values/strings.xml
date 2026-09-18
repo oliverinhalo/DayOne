@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">DayOne</string>
+    <string name="notif_channel_daily">Daily photo reminder</string>
+    <string name="notif_channel_daily_desc">Reminds you every morning to take your daily photo, and repeats until you do.</string>
+</resources>
