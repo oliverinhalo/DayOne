@@ -1,3 +1,18 @@
 <resources>
-    <style name="Theme.DayOne" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+      Splash theme: the launcher shows the app icon on the brand colour while the
+      process starts, instead of a white flash. postSplashScreenTheme is what the
+      activity switches to once Compose takes over.
+    -->
+    <style name="Theme.DayOne" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.DayOne.Main</item>
+    </style>
+
+    <style name="Theme.DayOne.Main" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/splash_background</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
 </resources>

@@ -1,0 +1,21 @@
+# Gradle / build output
+.gradle/
+build/
+app/build/
+captures/
+.cxx/
+
+# Local configuration (machine specific)
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+
+# JVM crash logs
+hs_err_pid*.log
+replay_pid*.log
+
+# OS noise
+.DS_Store
+Thumbs.db

@@ -39,5 +39,11 @@ data class PhotoEntry(
     val faceRight: Float? = null,
     val faceBottom: Float? = null,
 
-    val capturedAtMillis: Long = System.currentTimeMillis()
+    val capturedAtMillis: Long = System.currentTimeMillis(),
+
+    /** Optional one-line note for the day, shown in the timeline and (optionally) in the video. */
+    val note: String? = null,
+
+    /** Starred days, for filtering a highlights-only export. */
+    val favorite: Boolean = false
 )
