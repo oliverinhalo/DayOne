@@ -85,3 +85,11 @@ makes lining up the shot easy, a video export that works, and schedules that fit
 - Unit tests cover the streak and schedule rules.
 
 Still completely offline: no `INTERNET` permission, no accounts, no tracking.
+
+## One more thing
+
+The app promised to be network-incapable, but 1.x quietly shipped with
+`android.permission.INTERNET` merged in from a dependency's manifest (Coil declares it
+for remote image loading; DayOne only ever loads files from disk). 2.0 removes it from
+the merged manifest, so the app now genuinely cannot reach the network at the OS level,
+whatever any library tries.

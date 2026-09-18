@@ -22,7 +22,15 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
-    <!-- No INTERNET permission is requested: the app is fully local-only. -->
+    <!--
+      The app is fully local-only, but libraries bring their own manifests: Coil declares
+      INTERNET for remote image loading (DayOne only ever loads files from disk), and Play
+      Services declares ACCESS_NETWORK_STATE. Merging those in would have shipped an app
+      that *could* reach the network. Removing INTERNET here means it cannot, at the OS
+      level, no matter what any dependency tries - and face detection degrades to a centred
+      crop rather than failing if ML Kit ever wanted the network.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
 
     <application
         android:name=".DayOneApp"
