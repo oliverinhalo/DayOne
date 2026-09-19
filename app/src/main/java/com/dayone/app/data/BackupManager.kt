@@ -213,6 +213,9 @@ object BackupManager {
         project: Project,
         uris: List<Uri>,
         overwriteExisting: Boolean = false,
+        // Imports used to skip the gallery entirely, so photos brought in from elsewhere
+        // were invisible outside the app even with "save a copy to Gallery" turned on.
+        copyToGallery: Boolean = false,
         onProgress: (Float) -> Unit = {}
     ): RestoreResult {
         var added = 0
@@ -229,6 +232,16 @@ object BackupManager {
                     val file = repo.copyFileToProject(project, uri, context, date)
                     if (file != null) {
                         repo.saveEntry(project, date, file, null)
+                        if (copyToGallery) {
+                            runCatching {
+                                MediaStoreSaver.saveImage(
+                                    context = context,
+                                    source = file,
+                                    displayName = file.name,
+                                    subFolder = GalleryMigrator.folderFor(project)
+                                )
+                            }
+                        }
                         added++
                     } else {
                         skipped++

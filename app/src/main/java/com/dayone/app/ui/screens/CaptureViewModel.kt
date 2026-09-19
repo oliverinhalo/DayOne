@@ -11,6 +11,7 @@ import com.dayone.app.DayOneApp
 import com.dayone.app.camera.EdgeMap
 import com.dayone.app.camera.FaceCropper
 import com.dayone.app.data.AppSettings
+import com.dayone.app.data.GalleryMigrator
 import com.dayone.app.data.GhostReference
 import com.dayone.app.data.MediaStoreSaver
 import com.dayone.app.data.StreakCalculator
@@ -202,8 +203,8 @@ class CaptureViewModel(app: Application) : AndroidViewModel(app) {
                         MediaStoreSaver.saveImage(
                             context = getApplication(),
                             source = destination,
-                            displayName = "${project.folderName}_$today.jpg",
-                            subFolder = "DayOne/${project.folderName}"
+                            displayName = destination.name,
+                            subFolder = GalleryMigrator.folderFor(project)
                         )
                     }
                 }

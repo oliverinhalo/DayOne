@@ -48,6 +48,9 @@ updates. It is a self-signed sideload key for a private, offline app, not a Play
 - **Backup, restore and import** — export everything to a `.zip` in `Documents/DayOne`
   (outside the app, so it survives an uninstall), restore it later, or bulk-import existing
   photos whose dates come from their filenames or EXIF data.
+- **Photos in your gallery** — optionally copy every photo to `Pictures/DayOne/<project>`
+  as you take it, and a one-tap **Copy existing photos to your gallery** for everything
+  already in the app (per project, or all of them at once).
 - **Face light** — the screen around the crop frame turns into a soft white panel at full
   brightness, so a dim room still gets a usable photo.
 - **Theming** — system/light/dark, pure-black dark mode, Material You dynamic colour, or a
@@ -118,6 +121,7 @@ but must not stay in the repo if it is also the app signing key.
 
 - Photos: `Android/data/com.dayone.app/files/DayOne/<Project>/`, one JPEG per day named
   `<epochDay>_<yyyy-MM-dd>.jpg`.
+- Gallery copies (optional): `Pictures/DayOne/<Project>/`, same filenames.
 - Metadata: a Room database inside the app's private storage.
 - Exported videos: `Movies/DayOne` (shared storage) plus a copy under the app's `exports/`.
 - Backups: `Documents/DayOne/dayone-backup-<timestamp>.zip`.

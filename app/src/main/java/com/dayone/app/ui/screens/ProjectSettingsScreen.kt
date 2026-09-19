@@ -24,8 +24,11 @@ import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Cake
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -53,6 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dayone.app.DayOneApp
+import com.dayone.app.data.GalleryMigrator
 import com.dayone.app.data.db.Project
 import com.dayone.app.data.db.Weekdays
 import com.dayone.app.notify.ReminderScheduler
@@ -94,6 +98,7 @@ fun ProjectSettingsScreen(
     val context = LocalContext.current
     val project by viewModel.project.collectAsStateWithLifecycle()
     val storage by viewModel.storageLabel.collectAsStateWithLifecycle()
+    val galleryCopy by viewModel.galleryCopy.collectAsStateWithLifecycle()
 
     var showTimePicker by remember { mutableStateOf(false) }
     var showSecondTimePicker by remember { mutableStateOf(false) }
@@ -286,8 +291,25 @@ fun ProjectSettingsScreen(
             SettingsCard {
                 SettingRow(title = "Photos on disk", subtitle = storage)
                 SettingRow(
-                    title = "Folder",
+                    title = "App folder",
                     subtitle = "DayOne/${current.folderName}"
+                )
+                SettingRow(
+                    title = "Copy this project to your gallery",
+                    subtitle = when (val state = galleryCopy) {
+                        is MigrationState.Running -> "Copying ${(state.progress * 100).toInt()}%..."
+                        is MigrationState.Done -> state.summary
+                        else -> "Puts its photos in Pictures/${GalleryMigrator.folderFor(current)}, " +
+                            "where Gallery and Files can see them"
+                    },
+                    icon = Icons.Default.PhotoLibrary,
+                    enabled = galleryCopy !is MigrationState.Running,
+                    onClick = { viewModel.copyToGallery(context) },
+                    trailing = {
+                        if (galleryCopy is MigrationState.Running) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        }
+                    }
                 )
                 SettingRow(
                     title = "Delete this project",
@@ -385,6 +407,43 @@ class ProjectSettingsViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _storageLabel = MutableStateFlow("...")
     val storageLabel: StateFlow<String> = _storageLabel.asStateFlow()
+
+    private val _galleryCopy = MutableStateFlow<MigrationState>(MigrationState.Idle)
+    val galleryCopy: StateFlow<MigrationState> = _galleryCopy.asStateFlow()
+
+    /**
+     * Publishes this project's existing photos to the gallery. Anything already there is
+     * skipped, so it can be run whenever new photos have been imported.
+     */
+    fun copyToGallery(context: Context) {
+        val project = _project.value ?: return
+        if (_galleryCopy.value is MigrationState.Running) return
+        val appContext = context.applicationContext
+        _galleryCopy.value = MigrationState.Running(0f)
+
+        viewModelScope.launch {
+            val outcome = runCatching {
+                withContext(Dispatchers.IO) {
+                    val files = repo.getEntries(project.id).map { java.io.File(it.filePath) }
+                    GalleryMigrator.migrate(appContext, project, files) { progress ->
+                        _galleryCopy.value = MigrationState.Running(progress)
+                    }
+                }
+            }
+            _galleryCopy.value = outcome.fold(
+                onSuccess = { result ->
+                    MigrationState.Done(
+                        buildString {
+                            append(if (result.copied == 0) "Nothing new to copy" else "Copied ${result.copied} photo(s) to ${result.folder}")
+                            if (result.alreadyThere > 0) append(" - ${result.alreadyThere} already there")
+                            if (result.failed > 0) append(" - ${result.failed} failed")
+                        }
+                    )
+                },
+                onFailure = { MigrationState.Done("Copy failed: ${it.message}") }
+            )
+        }
+    }
 
     private var loadedProjectId = -1L
 

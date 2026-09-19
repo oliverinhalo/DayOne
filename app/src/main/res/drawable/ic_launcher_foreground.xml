@@ -1,17 +1,14 @@
+<!--
+  A plain ring: the original DayOne mark. It reads at launcher size, in the
+  themed-icon monochrome slot and as a 24dp status-bar glyph without becoming mush,
+  which a camera body with a lens cut-out does not.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Camera body -->
     <path
         android:fillColor="#00E5A0"
-        android:pathData="M36,38 L40,32 L68,32 L72,38 L78,38 C80.2,38 82,39.8 82,42 L82,70 C82,72.2 80.2,74 78,74 L30,74 C27.8,74 26,72.2 26,70 L26,42 C26,39.8 27.8,38 30,38 Z" />
-    <!-- Lens cut-out -->
-    <path
-        android:fillColor="#0E0E14"
-        android:pathData="M54,42 A14,14 0 1 1 53.9,42 Z" />
-    <path
-        android:fillColor="#00E5A0"
-        android:pathData="M54,48 A8,8 0 1 1 53.9,48 Z" />
+        android:pathData="M54,30 A24,24 0 1 1 53.9,30 Z M54,38 A16,16 0 1 0 54.1,38 Z" />
 </vector>
