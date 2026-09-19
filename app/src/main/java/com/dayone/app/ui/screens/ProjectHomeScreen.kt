@@ -371,7 +371,13 @@ class ProjectHomeViewModel(app: Application) : AndroidViewModel(app) {
         val project = _project.value ?: return
         _importing.value = true
         viewModelScope.launch {
-            val result = BackupManager.importImages(context, repo, project, uris)
+            val result = BackupManager.importImages(
+                context = context,
+                repo = repo,
+                project = project,
+                uris = uris,
+                copyToGallery = settings.current.saveCopyToGallery
+            )
             _importing.value = false
             onFinished(result.photosAdded, result.photosSkipped)
         }

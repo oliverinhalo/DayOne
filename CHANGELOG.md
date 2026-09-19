@@ -1,3 +1,43 @@
+# DayOne 2.2
+
+## Photos that were only inside the app
+
+"Save a copy to your gallery" only ever applied at the moment a photo was taken, so
+anything imported - or shot before the setting was switched on - stayed invisible to the
+Gallery and Files apps. Two fixes:
+
+- **Copy existing photos to your gallery**, in Settings -> Photos & storage, walks every
+  project and copies what is missing into `Pictures/DayOne/<project>`. Photos already
+  there are skipped, so running it twice costs time but never duplicates anything. There
+  is a per-project version in each project's settings.
+- **Importing now honours the setting.** If a copy to the gallery is switched on, photos
+  you import land in the gallery folder the same way a photo you just took does.
+
+Gallery copies are named after the file on disk, so a photo is recognised as already
+copied no matter which route put it there.
+
+## Settings, reorganised
+
+Settings was one long scroll mixing appearance, camera, reminders, video and backup.
+It is now an index of eight sections - Appearance, Camera, Overlay & guides, Reminders,
+Video, Photos & storage, Backup & restore, About - each on its own screen. Every row on
+the index shows its current state ("Dark - custom accent", "1080p - 30fps - 150ms per
+photo"), so most questions are answered without opening anything.
+
+The wording went with it. Labels say what happens rather than naming the mechanism:
+"Check the shot before it's saved" instead of "Review before saving", "Ask again every"
+instead of "Repeat every", "Keep the screen awake" instead of "Keep the screen on". A new
+**Where things are kept** panel lists all four locations - app folder, gallery folder,
+exported videos, backups - in one place.
+
+## The icon is a circle again
+
+Back to the original ring mark, across the launcher icon, the themed monochrome icon, the
+launcher shortcuts and the status-bar notification glyph. The camera-body icon lost its
+detail at small sizes; a ring does not.
+
+---
+
 # DayOne 2.1
 
 Fixes the shutter, makes the overlay and video pace adjustable, adds a screen-based face

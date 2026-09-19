@@ -37,6 +37,8 @@ import com.dayone.app.ui.screens.ProjectHomeScreen
 import com.dayone.app.ui.screens.ProjectListScreen
 import com.dayone.app.ui.screens.ProjectSettingsScreen
 import com.dayone.app.ui.screens.SettingsScreen
+import com.dayone.app.ui.screens.SettingsSection
+import com.dayone.app.ui.screens.SettingsSectionScreen
 import com.dayone.app.ui.screens.TimelineScreen
 import com.dayone.app.ui.screens.VideoExportScreen
 import com.dayone.app.ui.theme.DayOneTheme
@@ -157,6 +159,16 @@ fun AppNavHost(
         }
         composable("settings") {
             SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onOpenSection = { section -> navController.navigate("settings/${section.route}") }
+            )
+        }
+        composable(
+            "settings/{section}",
+            arguments = listOf(navArgument("section") { type = NavType.StringType })
+        ) { backStackEntry ->
+            SettingsSectionScreen(
+                section = SettingsSection.fromRoute(backStackEntry.arguments?.getString("section")),
                 onBack = { navController.popBackStack() },
                 onReplayIntro = { navController.navigate("onboarding") },
                 onOpenTerms = { navController.navigate("terms") },
